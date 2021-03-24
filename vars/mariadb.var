@@ -1,0 +1,7 @@
+---
+mariadb_root: myroot123
+mariadb_user_name: wpuser
+mariadb_user_passwd: myuser123
+mariadb_database: wordpress
+
+

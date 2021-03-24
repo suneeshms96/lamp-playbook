@@ -1,0 +1,4 @@
+---
+httpd_port: 8080
+domain: www.example.com
+

@@ -1,0 +1,141 @@
+---
+- name: LAMP Installation
+  hosts: amazon
+  become: true
+  vars:
+    wordpress_url: https://wordpress.org/wordpress-4.8.3.tar.gz
+  vars_files:
+    - ./vars/httpd.var
+    - ./vars/mariadb.var
+  tasks:  
+    - name: Installing Apache Webserver
+      yum: 
+        name: httpd
+        state: present
+
+    - name: Configuring Apache conf
+      template:
+        src: ./templates/httpd.conf.tmpl
+        dest: /etc/httpd/conf/httpd.conf
+    
+    - name: Configuring Virtualhost file
+      template:
+        src: ./templates/virtualhost.conf.tmpl
+        dest: /etc/httpd/conf.d/{{ domain }}.conf
+
+    - name: Setting Documentroot
+      file:
+        path: /var/www/html/{{ domain }}
+        state: directory
+        owner: apache
+        group: apache
+
+    - name: Creating Apache test.php file
+      copy:
+        content:  "<?php phpinfo(); ?>"
+        dest: /var/www/html/{{ domain }}/test.php
+
+    - name: Creating Apache test.html file
+      copy:
+        content:  "<h1>it works</h1>"
+        dest: /var/www/html/{{ domain }}/test.html
+
+    - name: Restarting Webserver
+      service:
+        name: httpd
+        state: restarted
+        enabled: true
+
+        ###################################
+        
+#installing & configuring MariaDB
+    - name: Installing mariadb
+      yum:
+        name:
+          - mariadb-server
+          - MySQL-python
+        state: present
+
+    - name: Restarting mariadb
+      service: 
+        name: mariadb
+        state: restarted
+        enabled: true
+
+    - name: Resetting Root password
+      mysql_user:
+        host_all: true
+        login_user: root
+        login_password: ""
+        user: root
+        password: "{{ mariadb_root }}"
+
+    - name: removing anonymous users
+      mysql_user:
+        host_all: true
+        login_user: root
+        login_password: "{{ mariadb_root }}"
+        user: ""
+        state: absent
+
+    - name: Creating Database
+      mysql_db:
+        login_user: root
+        login_password: "{{ mariadb_root }}"
+        name: "{{ mariadb_database }}"
+        state: present
+
+    - name: Creating Database user
+      mysql_user:
+        login_user: root
+        login_password: "{{ mariadb_root }}"
+        name: "{{ mariadb_user_name }}"
+        password: "{{ mariadb_user_passwd }}"
+        priv: '*.*:ALL,GRANT'
+        state: present
+
+#Wordpress Installation
+
+    - name: Wordpress Downloading
+      get_url:
+        url: "{{ wordpress_url }}"
+        dest: /tmp/wordpress.tar.gz
+
+    - name: wordpress file extracting
+      unarchive:
+        src: /tmp/wordpress.tar.gz
+        dest: /tmp/
+        remote_src: true
+
+    - name: copying Contents to Documentroot
+      copy:
+        src: /tmp/wordpress/
+        dest: /var/www/html/{{ domain }}
+        remote_src: true
+        owner: apache
+        group: apache
+
+    - name: Configuring Wordpress config file
+      template: 
+        src: ./templates/wordpress-conf.tmpl
+        dest: /var/www/html/{{ domain }}/wp-config.php
+        owner: apache
+        group: apache
+
+#PHP installation
+    - name: PHP Installation
+      yum:
+        name:
+          - php
+          - php-mysql
+        state: present
+
+#Restarting all services
+    - name: post Installation Restart
+      service:
+        name: "{{ item }}"
+        state: restarted
+
+      loop:
+        - httpd
+        - mariadb
